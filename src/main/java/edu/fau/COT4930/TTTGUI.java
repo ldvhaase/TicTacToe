@@ -1,50 +1,63 @@
 package edu.fau.COT4930;
 
-import java.awt.*;
-import javax.swing.*;
+import java.awt.BorderLayout;
+import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 
 /**
  * @author Lucas Haase 
  * COT4930 Java Programming 
  * Final Project - TicTacToe
  */
-public class TTTGUI extends JFrame {
+public class TTTGUI extends JFrame implements Serializable {
 
-    PlayerImpl player1 = new PlayerImpl("Player1");
-    PlayerImpl player2 = new PlayerImpl("Player2");
+    private final PlayerImpl player1 = new PlayerImpl("Player1");
+    private final PlayerImpl player2 = new PlayerImpl("Player2");
 
-    //layouts 
-    private static final BorderLayout MAIN_LAYOUT = new BorderLayout();
+    //layout
     private static final GridLayout CENTER_LAYOUT = new GridLayout(3, 3);
-    private static final GridLayout BUTTON_LAYOUT = new GridLayout(2, 1);
-//    private static final BoxLayout TITLE_LAYOUT = new BoxLayout();
 
     //frame dimensions
-    private static final int HEIGHT = 400;
-    private static final int WIDTH = 400;
+    private static final int H = 400;
+    private static final int W = 400;
 
     //menu bar
     private JMenuBar menuBar;
     private JMenu menu;
-    private JMenuItem menuNewGame;
-    private JMenuItem menuExit;
+    private JMenuItem menuNewGame, menuExit, menuSave, menuLoad;
 
     //playing board spaces
     private JButton spaces[] = new JButton[9];
 
-    //private JButton newGame, exit;
-    private JPanel titlePanel, mainPanel, markPanel;
+    //panels
+    private JPanel mainPanel, buttonPanel, playerPanel;
 
     private String currentPlayer = "Player 1: start";
     private int turns = 0;
     private String mark = "";
     private boolean win = false;
 
+    //default constructor
     public TTTGUI() {
-        initializeGUI();   
-        setSize(WIDTH, HEIGHT);
+        initializeGUI();
+        setSize(W, H);
     }
 
     private void initializeGUI() {
@@ -52,16 +65,18 @@ public class TTTGUI extends JFrame {
         menuBar = new JMenuBar();
         menu = new JMenu("Menu");
         menuNewGame = new JMenuItem("New Game");
+        menuSave = new JMenuItem("Save Game");
+        menuLoad = new JMenuItem("Load Game");
         menuExit = new JMenuItem("Exit");
 
         //title, player indication
         JLabel title = new JLabel(currentPlayer);
-        titlePanel = new JPanel();
+        playerPanel = new JPanel();
 
         //playing board
         mainPanel = new JPanel();
-        markPanel = new JPanel();
-        markPanel.setLayout(CENTER_LAYOUT);
+        buttonPanel = new JPanel();
+        buttonPanel.setLayout(CENTER_LAYOUT);
 
         //listener for game board
         class ButtonListener implements ActionListener {
@@ -86,50 +101,60 @@ public class TTTGUI extends JFrame {
         for (int i = 0; i < 9; i++) {
             spaces[i] = new JButton("");
             spaces[i].addActionListener(buttonListener);
-            markPanel.add(spaces[i]);
+            buttonPanel.add(spaces[i]);
         }
 
         //listener for quit
-        class ExitListener implements ActionListener {
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                System.exit(0);
+        menuExit.addActionListener((ActionEvent e) -> {
+            for (int i = 0; i < 9; i++) {
+                win = false;
+                spaces[i].setText("");
+                spaces[i].setEnabled(true);
+                turns = 0;
             }
-        }
-        ActionListener exitListener = new ExitListener();
-        menuExit.addActionListener(exitListener);
+        });
 
         //listener for new game
-        class NewGameListener implements ActionListener {
+        menuNewGame.addActionListener((ActionEvent e) -> {
+            for (int i = 0; i < 9; i++) {
+                win = false;
+                spaces[i].setText("");
+                spaces[i].setEnabled(true);
+                turns = 0;
+            }  
+        });
 
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                for (int i = 0; i < 9; i++) {
-                    win = false;
-                    spaces[i].setText("");
-                    spaces[i].setEnabled(true);
-                    turns = 0;
-                }
+        //listener for save game
+        menuSave.addActionListener((ActionEvent e) -> {
+            saveState();
+        });
+        
+
+        //listener for load game
+        menuLoad.addActionListener((ActionEvent e) -> {
+            try {
+                loadState();
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(TTTGUI.class.getName()).log(Level.SEVERE, null, ex);
             }
-        }
-        ActionListener newGameListener = new NewGameListener();
-        menuNewGame.addActionListener(newGameListener);
+        });
 
         //assembling menu bar
         menu.add(menuNewGame);
+        menu.add(menuSave);
+        menu.add(menuLoad);
         menu.add(menuExit);
         menuBar.add(menu);
 
         //adding title to panel
-        titlePanel.add(title);
+        playerPanel.add(title);
 
         //assemble the game panel
         mainPanel = new JPanel();
         mainPanel.setLayout(new BorderLayout());
-        mainPanel.add(menuBar, BorderLayout.NORTH);        
-        mainPanel.add(markPanel, BorderLayout.CENTER);
-        mainPanel.add(titlePanel, BorderLayout.SOUTH);
+        mainPanel.add(menuBar, BorderLayout.NORTH);
+        mainPanel.add(buttonPanel, BorderLayout.CENTER);
+        mainPanel.add(playerPanel, BorderLayout.SOUTH);
         add(mainPanel);
     }
 
@@ -181,7 +206,7 @@ public class TTTGUI extends JFrame {
     //display the winner of the Game
     public void displayWinner() {
         if (turns >= 5 && turns <= 9) {
-            
+
             checkWins();
 
             if (win == true) {
@@ -192,6 +217,28 @@ public class TTTGUI extends JFrame {
                 JOptionPane.showMessageDialog(null, "GAME IS A TIE.");
                 System.exit(0);
             }
+        }
+    }
+
+    public void saveState() {
+        try {
+            try (ObjectOutputStream out = new ObjectOutputStream(
+                    new FileOutputStream("gameData.ser"))) {
+                out.writeObject(spaces);
+            }
+        } catch (IOException e) {
+            System.out.println("Serialization IO Error");
+        }
+    }
+
+    public void loadState() throws ClassNotFoundException {
+        try {
+            try (ObjectInputStream in = new ObjectInputStream(
+                    new FileInputStream("gameData.ser"))) {
+                spaces = (JButton[]) in.readObject();
+            }
+        } catch (IOException e) {
+            System.out.println("Deserialization IO Error");
         }
     }
 
